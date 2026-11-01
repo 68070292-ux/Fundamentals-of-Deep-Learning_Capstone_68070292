@@ -91,8 +91,8 @@ def prepare_dataloaders(data_dir, batch_size=32, img_size=128, seed=42):
     val_ds = RVLCDIPDataset(val_paths, val_labels, transform=val_test_transform)
     test_ds = RVLCDIPDataset(test_paths, test_labels, transform=val_test_transform)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
     return train_loader, val_loader, test_loader, classes
