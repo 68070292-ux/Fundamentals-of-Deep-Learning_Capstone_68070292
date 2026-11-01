@@ -24,7 +24,7 @@ class RVLCDIPDataset(Dataset):
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         return image, label
 
-def get_transforms(img_size=128):
+def get_transforms(img_size=64):
     """
     Data Transforms & Augmentation (ใช้ Regularization สอดคล้องกับวิชาเรียน)
     """
@@ -44,7 +44,7 @@ def get_transforms(img_size=128):
 
     return train_transform, val_test_transform
 
-def prepare_dataloaders(data_dir, batch_size=32, img_size=128, seed=42):
+def prepare_dataloaders(data_dir, batch_size=32, img_size=64, seed=42):
     """
     อ่านโครงสร้างโฟลเดอร์ แบ่ง Train (80%) / Val (10%) / Test (10%)
     """
