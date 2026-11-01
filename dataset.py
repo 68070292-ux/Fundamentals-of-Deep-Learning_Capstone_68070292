@@ -16,7 +16,12 @@ class RVLCDIPDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = self.file_paths[idx]
-        image = Image.open(img_path).convert('L') # RVL-CDIP เป็นภาพ Grayscale
+        
+        try:
+            image = Image.open(img_path).convert('L') # RVL-CDIP เป็นภาพ Grayscale
+        except Exception:
+            # กรณีเจอไฟล์รูปชำรุด ให้สร้างภาพสีดำขนาด 64x64 มาแทนที่
+            image = Image.new('L', (64, 64), color=0)
         
         if self.transform:
             image = self.transform(image)
