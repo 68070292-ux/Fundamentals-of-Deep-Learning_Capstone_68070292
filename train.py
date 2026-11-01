@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tqdm import tqdm
 from dataset import prepare_dataloaders
 from model import DocumentCNN
 
@@ -11,13 +12,14 @@ def set_seed(seed=42):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
 
-def train_epoch(model, dataloader, criterion, optimizer, device):
+def train_epoch(model, dataloader, criterion, optimizer, device, epoch, total_epochs):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
 
-    for images, labels in dataloader:
+    pbar = tqdm(dataloader, desc=f"Epoch [{epoch:02d}/{total_epochs:02d}]")
+    for images, labels in pbar:
         images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad()
@@ -30,6 +32,9 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
         _, preds = torch.max(outputs, 1)
         correct += torch.sum(preds == labels.data).item()
         total += labels.size(0)
+
+        # อัปเดต Loss/Acc บน Progress Bar
+        pbar.set_postfix({'loss': f"{running_loss/total:.4f}", 'acc': f"{correct/total*100:.2f}%"})
 
     epoch_loss = running_loss / total
     epoch_acc = correct / total
@@ -60,8 +65,10 @@ def validate(model, dataloader, criterion, device):
 def main():
     parser = argparse.ArgumentParser(description="Train DocumentCNN on RVL-CDIP")
     parser.add_argument("--data_path", type=str, required=True, help="Path to RVL-CDIP dataset")
-    parser.add_argument("--epochs", type=int, default=15, help="Number of epochs")
-    parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
+    
+    parser.add_argument("--batch_size", type=int, default=128, help="Batch size for training")
+    
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="L2 regularization")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
@@ -79,27 +86,38 @@ def main():
         seed=args.seed
     )
 
-    # Initialize Model, Loss, Optimizer
-    model = DocumentCNN(num_classes=len(classes)).to(device)
+    # Initialize Model
+    model = DocumentCNN(num_classes=len(classes))
+    
+    # รองรับ Multi-GPU (GPU T4 x2)
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs!")
+        model = nn.DataParallel(model)
+        
+    model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     best_val_acc = 0.0
+    
     save_path = os.path.join(args.output_dir, "best_model.pth")
 
-    print("Starting Training...")
+    print("\n--- Starting Training ---")
     for epoch in range(1, args.epochs + 1):
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
+        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device, epoch, args.epochs)
         val_loss, val_acc = validate(model, val_loader, criterion, device)
 
         print(f"Epoch [{epoch:02d}/{args.epochs:02d}] | "
               f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc*100:.2f}% | "
               f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc*100:.2f}%")
 
+        # บันทึก Weight ของ Epoch ที่ได้ Validation Accuracy สูงที่สุด
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), save_path)
-            print(f"--> Saved best model checkpoint to {save_path}")
+            # รองรับการดึง state_dict ทั้งแบบ Single GPU และ Multi-GPU
+            state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
+            torch.save(state_dict, save_path)
+            print(f"  --> Saved best model checkpoint to {save_path} (Val Acc: {best_val_acc*100:.2f}%)")
 
 if __name__ == "__main__":
     main()
